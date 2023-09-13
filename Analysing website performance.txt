@@ -1,0 +1,203 @@
+--                             Analysing website performance
+
+-- 1. most viewed website pages ranked by session volume
+select pageview_url,count(distinct website_pageview_id) sessions from website_pageviews where created_at<"2012-06-09" 
+group by pageview_url order by 2 desc;
+
+-- 2. pull all entry pages and rank them on entry volume
+select pageview_url,count(distinct website_pageview_id) sessions from website_pageviews where created_at<"2012-06-09" 
+group by pageview_url order by 2 desc;
+
+select min(created_at),pageview_url from website_pageviews where created_at<"2012-06-09"
+ group by website_session_id,pageview_url;
+ 
+ select pageview_url,count(a) from (select pageview_url,row_number() over (partition by website_session_id order by
+ created_at) a from website_pageviews where created_at<"2012-06-09") aa where a = 1 group by pageview_url;
+ -- group by website_session_id,pageview_url;
+ select pageview_url,row_number() over (partition by website_session_id order by
+ created_at) a from website_pageviews; -- where website_pageview_id<11;
+ 
+  -- 7
+  select w.pageview_url,count(distinct aa.website_pageview_id) session_hitting_page from website_pageviews w join 
+  (select website_session_id, min(website_pageview_id) website_pageview_id from website_pageviews where created_at<"2012-06-12"
+  group by website_session_id) aa on w.website_pageview_id = aa.website_pageview_id group by w.pageview_url;
+ 
+  select website_session_id, min(website_pageview_id) website_pageview_id from website_pageviews where created_at between "2014-01-01" and
+  "2014-02-01" group by website_session_id;
+  
+  
+  select e.pageview_url,count(e.website_session_id) session,count(u.website_session_id) bounced_session,
+  count(u.website_session_id)/count(e.website_session_id) bounce_rate from 
+  (select w.pageview_url pageview_url,w.website_session_id website_session_id from website_pageviews w join 
+(select website_session_id, min(website_pageview_id) website_pageview_id from website_pageviews where created_at 
+between "2014-01-01" and "2014-02-01"
+group by website_session_id) aa on w.website_pageview_id = aa.website_pageview_id ) e
+ left join
+  (select w.pageview_url pageview_url,aa.website_session_id website_session_id,count(k.website_pageview_id) count_page_views
+  from website_pageviews w join 
+  (select website_session_id, min(website_pageview_id) website_pageview_id from website_pageviews where created_at between "2014-01-01" and
+  "2014-02-01"
+  group by website_session_id) aa 
+  join website_pageviews k on aa.website_session_id = k.website_session_id
+  on w.website_pageview_id = aa.website_pageview_id group by w.pageview_url, aa.website_session_id
+  having count(k.website_pageview_id) = 1) u on e.website_session_id = u.website_session_id
+  group by e.pageview_url
+  ;
+  
+                      -- or
+-- 3. in order to see the total sessions and bounced sessions and bounce_rate over url pages
+  
+ with t1 as (select w.pageview_url pageview_url,w.website_session_id website_session_id from  
+(select website_session_id , min(website_pageview_id) website_pageview_id from website_pageviews
+  where created_at < "2012-06-14"
+group by website_session_id) dd join website_pageviews w 
+  on w.website_pageview_id = dd.website_pageview_id )  
+  
+  
+  select t1.pageview_url,count(t1.website_session_id) session,count(uu.website_session_id) bounced_session,
+  count(uu.website_session_id)/count(t1.website_session_id) bounce_rate from t1 left join 
+  
+  (select mm.pageview_url,mm.website_session_id website_session_id,count(mm.website_session_id) page_views from 
+  
+  (select p1.website_session_id website_session_id,p1.pageview_url pageview_url from website_pageviews p1 join 
+  
+  (
+  select w.website_session_id website_session_id,min(p.website_pageview_id) website_pageview_id from website_sessions w join 
+  website_pageviews p on w.website_session_id = p.website_session_id where w.created_at <
+"2012-06-14" 
+  group by w.website_session_id) dd
+  on p1.website_pageview_id = dd.website_pageview_id) mm 
+  left join website_pageviews p3 on mm.website_session_id = p3.website_session_id
+  group by pageview_url,website_session_id having count(mm.website_session_id) = 1) uu 
+  on t1.website_session_id = uu.website_session_id 
+  group by t1.pageview_url order by 1;
+  
+  ---------------------
+  -- 4. pull bounce rates for the two groups which are home nad lander-1 so we can evaluate the new page
+ with t1 as (select w.pageview_url pageview_url,w.website_session_id website_session_id from  
+(select ws.website_session_id website_session_id, min(website_pageview_id) website_pageview_id from 
+website_sessions ws inner join website_pageviews wp
+  on ws.website_session_id = wp.website_session_id  where ws.created_at <
+"2012-07-28" and ws.utm_source = "gsearch" and ws.utm_campaign = "nonbrand" and website_pageview_id>23504
+group by ws.website_session_id) dd inner join website_pageviews w 
+  on w.website_pageview_id = dd.website_pageview_id )  
+  
+  
+  select t1.pageview_url,count(t1.website_session_id) session,count(uu.website_session_id) bounced_session,
+  count(uu.website_session_id)/count(t1.website_session_id) bounce_rate from t1 left join 
+  
+  (select mm.pageview_url,mm.website_session_id website_session_id,count(mm.website_session_id) page_views from 
+  
+  (select p1.website_session_id website_session_id,p1.pageview_url pageview_url from website_pageviews p1 join 
+  
+  (
+  select w.website_session_id website_session_id,min(p.website_pageview_id) website_pageview_id from website_sessions w join 
+  website_pageviews p on w.website_session_id = p.website_session_id where w.created_at <
+"2012-07-28" and utm_source = "gsearch" and utm_campaign = "nonbrand" and website_pageview_id>23504
+  group by w.website_session_id) dd
+  on p1.website_pageview_id = dd.website_pageview_id) mm 
+  left join website_pageviews p3 on mm.website_session_id = p3.website_session_id
+  group by pageview_url,website_session_id having count(mm.website_session_id) = 1) uu 
+  on t1.website_session_id = uu.website_session_id 
+  group by t1.pageview_url order by 1 ;
+  
+  --------------------------------------------------------------------------
+  
+  -- 5. Could you pull the volume of paid search nonbrand traffic landing on /home and /lander-1, trended weekly since June 1st?
+  -- I want to confirm the traffic is all routed correctly.Could you also pull our overall paid search
+  -- bounce rate trended weekly? I want to make sure the lander change has improved the overall picture.
+  
+  with a1 as (select ws.website_session_id website_session_id, min(website_pageview_id) website_pageview_id,count(website_pageview_id)
+ website_pageview_id_count from 
+website_sessions ws left join website_pageviews wp
+  on ws.website_session_id = wp.website_session_id where ws.created_at > "2012-06-01" and ws.created_at <"2012-08-31"
+  and ws.utm_source = "gsearch" and ws.utm_campaign = "nonbrand" 
+group by ws.website_session_id),
+
+a2 as (select a1.website_session_id,a1.website_pageview_id,a1.website_pageview_id_count,p.pageview_url pageview_url,p.created_at created_at
+ from a1 left join website_pageviews p on a1.website_pageview_id = p.website_pageview_id)
+
+select min(date(a2.created_at)) start_week_date,count(distinct a2.website_session_id) total_session,
+count(case when a2.website_pageview_id_count = 1 then website_session_id else null end) bounced_session,
+count(case when a2.website_pageview_id_count = 1 then website_session_id else null end)*1.0/
+count(distinct a2.website_session_id) bounced_session_rate,
+count(case when a2.pageview_url ="/home"  then website_session_id else null end) home_sessions,
+count(case when a2.pageview_url ="/lander-1"  then website_session_id else null end) lander_1_session
+  from a2 group by yearweek(a2.created_at);
+  
+  -- 6. how many number of people reach the final cart from lander1 to cart hirarchy
+  
+  with q1 as (select w.website_session_id website_session_id,pageview_url,
+   case when pageview_url = "/products" then 1 else 0 end products_hit,
+   case when pageview_url = "/the-original-mr-fuzzy" then 1 else 0 end the_original_mr_fuzzy_hit,
+   case when pageview_url = "/cart" then 1 else 0 end cart_hit
+  from website_sessions w 
+   left join website_pageviews p on w.website_session_id = p.website_session_id 
+  where  w.created_at between"2014-01-01" and "2014-02-01" and 
+  pageview_url in ("/lander-2","/products","/the-original-mr-fuzzy","/cart")
+  group by 1,2),
+  
+   q2 as(select website_session_id,max(products_hit) products_hit,max(the_original_mr_fuzzy_hit) the_original_mr_fuzzy_hit,
+  max(cart_hit) cart_hit from q1 group by 1)
+
+  select count( website_session_id) sessions,
+  count(distinct case when products_hit =1 then website_session_id else null end) products_reach,
+  count(distinct case when the_original_mr_fuzzy_hit =1 then website_session_id else null end) the_original_mr_fuzzy_reach,
+  count(distinct case when cart_hit =1 then website_session_id else null end) cart_reach
+  from q2;
+
+ -- 7. how many number of people reach the final cart from lander1 to thank_you page in terms of rates 
+  select  * from website_sessions;
+  with q1 as (select w.website_session_id website_session_id,pageview_url,
+   case when pageview_url = "/products" then 1 else 0 end products_hit,
+   case when pageview_url = "/the-original-mr-fuzzy" then 1 else 0 end the_original_mr_fuzzy_hit,
+   case when pageview_url = "/cart" then 1 else 0 end cart_hit,
+   case when pageview_url = "/shipping" then 1 else 0 end shipping_hit,
+   case when pageview_url = "/billing" then 1 else 0 end billing_hit,
+   case when pageview_url = "/thank-you-for-your-order" then 1 else 0 end tank_you_hit
+  from website_sessions w 
+   left join website_pageviews p on w.website_session_id = p.website_session_id 
+  where  w.created_at >"2012-08-05" and w.created_at<"2012-09-05" 
+  and utm_source = "gsearch"
+  and utm_campaign = "nonbrand"
+  group by 1,2),
+  
+   q2 as(select website_session_id,max(products_hit) products_hit,max(the_original_mr_fuzzy_hit) the_original_mr_fuzzy_hit,
+  max(cart_hit) cart_hit,max(shipping_hit) shipping_hit,max(billing_hit) billing_hit,max(tank_you_hit) tank_you_hit
+  from q1 group by 1)
+
+  -- select count( website_session_id) sessions,
+--   count(distinct case when products_hit =1 then website_session_id else null end) products_reach,
+--   count(distinct case when the_original_mr_fuzzy_hit =1 then website_session_id else null end) the_original_mr_fuzzy_reach,
+--   count(distinct case when cart_hit =1 then website_session_id else null end) cart_reach,
+--   count(distinct case when shipping_hit =1 then website_session_id else null end) shipping_reach,
+--   count(distinct case when billing_hit =1 then website_session_id else null end) billing_reach,
+--   count(distinct case when tank_you_hit =1 then website_session_id else null end) tank_you_reach
+--   from q2;
+--   
+  select count( website_session_id) sessions,
+  count(distinct case when products_hit =1 then website_session_id else null end)*1.0 /
+  count( website_session_id) lander_products_rate,
+  count(distinct case when the_original_mr_fuzzy_hit =1 then website_session_id else null end)*1.0/
+  count(distinct case when products_hit =1 then website_session_id else null end) product_the_original_mr_fuzzy_rate,
+  count(distinct case when cart_hit =1 then website_session_id else null end)*1.0/
+  count(distinct case when the_original_mr_fuzzy_hit =1 then website_session_id else null end) the_original_mr_fuzzy_cart_rate,
+  count(distinct case when shipping_hit =1 then website_session_id else null end)*1.0/
+  count(distinct case when cart_hit =1 then website_session_id else null end) cart_shipping_rate,
+  count(distinct case when billing_hit =1 then website_session_id else null end)*1.0/
+  count(distinct case when shipping_hit =1 then website_session_id else null end) shipping_billing_rate,
+  count(distinct case when tank_you_hit =1 then website_session_id else null end)*1.0/
+  count(distinct case when billing_hit =1 then website_session_id else null end) billing_thank_you_rate
+  from q2;
+  
+  ----------------------------------------------
+  -- 8. whether /billing-2 is doing any better than the original /billing page?
+  
+  with t1 as (select p.website_session_id website_session_id,
+  p.pageview_url pageview_url,o.order_id order_id from website_pageviews p left join orders o 
+  on p.website_session_id = o.website_session_id
+  where  p.pageview_url in("/billing","/billing-2")
+  and p.created_at<"2012-11-10" and p.website_pageview_id>53550)
+  
+  select pageview_url,count(website_session_id) sessions,count(order_id) orders,
+ count(order_id) /count(website_session_id) billing_order_rate from t1 group by pageview_url
