@@ -1,0 +1,144 @@
+--                                           Product-Level Analysis
+
+-- 1. monthlywise total number of sales, total revenue and total margine
+select year(created_at) yr,month(created_at) mo,count(order_id) number_of_sales,sum(price_usd) total_revenue,
+sum(price_usd-cogs_usd) total_margine from orders where created_at<"2013-01-04" group by 1,2;
+
+-- 2. monthly order volume, overall conversion rates, revenue per session, and a breakdown of sales by product
+select year(w.created_at) yr,month(w.created_at) mo,count(order_id) orders,count(order_id)/count(w.website_session_id) conv_rate,
+sum(price_usd)/count(w.website_session_id) revenue_per_sesssion, count(case when primary_product_id = 1 then order_id end) pr1,
+count(case when primary_product_id = 2 then order_id end) pr2
+from website_sessions w left join orders o on w.website_session_id = o.website_session_id
+where w.created_at< "2013-04-05" and w.created_at >"2012-04-01"group by 1,2;
+
+-- 3. Looks like the percent of /products pageviews that clicked to Mr. Fuzzy has gone down since the launch of the Love Bear, 
+-- but the overall clickthrough rate has gone up, so it seems to be generating additional product interest overall.
+
+-- As a follow up, we should probably look at the conversion funnels for each product individually.
+
+with t1 as (select website_session_id,website_pageview_id,created_at,
+(case when created_at < "2013-01-06" then "pre_product" 
+when created_at >= "2013-01-06" then "post_product" end) time_period
+ from website_pageviews where pageview_url = "/products"
+ and created_at > "2012-10-06" and created_at < "2013-04-06"),
+ 
+t2 as (select time_period,t1.website_session_id website_session_id,min(w.website_pageview_id) website_pageview_id from  t1
+ left join website_pageviews w on w.website_pageview_id > t1.website_pageview_id and w.website_session_id = t1.website_session_id
+ group by 1,2),
+ 
+ t3 as (select t2.time_period time_period,t2.website_session_id website_session_id ,w2.pageview_url pageview_url
+ from t2 left join website_pageviews w2 on t2.website_pageview_id = w2.website_pageview_id)
+ 
+ select time_period,count(website_session_id) sessions,count(pageview_url) nxt_page,
+  count(pageview_url)/count(website_session_id) perc_nxt_page,
+  count(case when pageview_url = "/the-original-mr-fuzzy" then website_session_id end) the_original_mr_fuzzy,
+  count(case when pageview_url = "/the-original-mr-fuzzy" then website_session_id end)/count(website_session_id) perc_mr_fuzzy,
+  count(case when pageview_url = "/the-forever-love-bear" then website_session_id end) the_forever_love_bear,
+  count(case when pageview_url = "/the-forever-love-bear" then website_session_id end)/count(website_session_id) perc_mr_fuzzy_love_bear
+  from t3 group by 1;
+ 
+-- 4. I'd like to look at our two products since January 6th and analyze the conversion funnels from each product page to conversion.
+-- It would be great if you could produce a comparison between the two conversion funnels, for all website traffic.
+
+with a2 as (select q.website_session_id website_session_id,q.website_pageview_id website_pageview_id,
+q.pageview_url pageview_url,products
+ from website_pageviews q join (select website_session_id,
+min(case when pageview_url = '/the-original-mr-fuzzy' then "mrfuzzy" 
+when pageview_url = '/the-forever-love-bear' then "lovebear" end) products from website_pageviews 
+where created_at<"2013-04-10" and created_at>"2013-01-06"  group by 1)
+b on q.website_session_id = b.website_session_id order by q.website_session_id)
+
+ select products,count(distinct website_session_id) session,
+count(case when  pageview_url = '/cart' then website_pageview_id end) cart,
+count(case when  pageview_url = '/shipping' then website_pageview_id end) shipping,
+count(case when  pageview_url in('/billing',"/billing-2") then website_pageview_id end) billing,
+count(case when  pageview_url = '/thank-you-for-your-order' then website_pageview_id end) thank_you
+from a2 where products is not null group by 1 ;
+
+--------------------------------------------- 
+
+with a2 as (select q.website_session_id website_session_id,q.website_pageview_id website_pageview_id,
+q.pageview_url pageview_url,products
+ from website_pageviews q join (select website_session_id,
+min(case when pageview_url = '/the-original-mr-fuzzy' then "mrfuzzy" 
+when pageview_url = '/the-forever-love-bear' then "lovebear" end) products from website_pageviews 
+where created_at<"2013-04-10" and created_at>"2013-01-06" group by 1)
+b on q.website_session_id = b.website_session_id order by q.website_session_id)
+
+ select products,
+ count(case when  pageview_url = '/cart' then website_pageview_id end)/
+ count(distinct website_session_id) product_page_click_rate,
+count(case when  pageview_url = '/shipping' then website_pageview_id end)/
+count(case when  pageview_url = '/cart' then website_pageview_id end) cart_click_rate,
+count(case when  pageview_url in( '/billing',"/billing-2") then website_pageview_id end)/
+count(case when  pageview_url = '/shipping' then website_pageview_id end) shipping_click_rate,
+count(case when  pageview_url = '/thank-you-for-your-order' then website_pageview_id end)/
+count(case when  pageview_url in( '/billing',"/billing-2") then website_pageview_id end) shipping_click_rate
+from a2 where products is not null group by 1;
+
+-----------------------------------------------------------------
+# cross sale produc: buy the primary product with one or more product
+select o.primary_product_id,product_id cross_sale_product_id,count(distinct o.order_id) orders
+from orders o left join order_items ot on o.order_id = ot.order_id and is_primary_item = 0 group by 1,2; 
+
+select o.primary_product_id,product_id cross_sale_product_id,count(distinct o.order_id) orders
+from orders o left join order_items ot on o.order_id = ot.order_id and is_primary_item = 0 
+where o.order_id between 10000 and 11000 group by 1,2 ; 
+--------------------------------------------------------------------------------
+-- 5. Could you please compare the month before vs the month after the change? I'd like to see CTR from the /cart page, 
+-- Avg Products per Order, AOV, and overall revenue per /cart page view.
+
+with w1 as(select 
+case when created_at < "2013-09-25" then "pre_cross_sale"
+ when created_at > "2013-09-25" then "post_cross_sale" end time_period,website_session_id,website_pageview_id
+ from website_pageviews where created_at between "2013-08-25" and "2013-10-25" and pageview_url = "/cart" ),
+
+w2 as (select time_period,w1.website_session_id,min(w.website_pageview_id) nxt_page_pageview_id from website_pageviews w left join w1 on w.website_pageview_id >w1.website_pageview_id
+and w.website_session_id = w1.website_session_id group by 1,2 having w1.website_session_id is not null)
+
+select w1.time_period,count(w1.website_session_id) cart_sesions,count(nxt_page_pageview_id) next_page,
+count(nxt_page_pageview_id)/count(w1.website_session_id) cart_to_nxt_page_rate
+,count(order_id) orders,sum(items_purchased) items_purchased,sum(items_purchased)/count(order_id) product_per_order,
+sum(price_usd) revenue,sum(price_usd)/count(order_id) aov,sum(price_usd)/count(w1.website_session_id) revenue_per_cart_session
+ from w1 left join w2 on w1.website_session_id = w2.website_session_id left join orders o on w2.website_session_id = 
+o.website_session_id group by 1;
+
+---------------------------------------------------------------------------------------
+-- 6. run a pre-post analysis comparing the month before vs. the month after, in terms of session-to- order conversion rate,
+-- AOV, products per order, and revenue per session?
+
+with w1 as(select 
+case when created_at < "2013-12-12" then "pre_birtday_bear"
+ when created_at >= "2013-12-12" then "post_birtday_bear" end time_period,website_session_id
+ from website_sessions where created_at between "2013-11-12" and "2014-1-12"  )
+ 
+select w1.time_period,count(distinct w1.website_session_id) sesions,
+count(distinct order_id) orders,count(distinct order_id)/count(distinct w1.website_session_id)  sesion_order_rate,
+sum(items_purchased) items_purchased,sum(items_purchased)/count(order_id) product_per_order,
+
+sum(price_usd) revenue,sum(price_usd)/count(order_id) aov,sum(price_usd)/count(distinct w1.website_session_id) revenue_per_session
+ from w1 left join orders o on w1.website_session_id = 
+o.website_session_id group by 1;
+
+----------------------------------------------------
+-- pull monthly product refund rates, by product, and confirm our quality issues are now fixed?
+select year(o.created_at) yr,month(o.created_at) mth,count(o.order_id) orders,
+count(case when o.product_id = 1 then o.order_id end ) p1,
+count(case when o.product_id = 1 then r.order_item_id end) p1_refund ,
+count(case when o.product_id = 1 then r.order_item_id end)/
+count(case when o.product_id = 1 then o.order_id end ) p1_refund_rate,
+count(case when o.product_id = 2 then o.order_id end ) p2,
+count(case when o.product_id = 2 then r.order_item_id end) p2_refund,
+count(case when o.product_id = 2 then r.order_item_id end)/
+count(case when o.product_id = 2 then o.order_id end ) p2_refund_rate,
+count(case when o.product_id = 3 then o.order_id end ) p3,
+count(case when o.product_id = 3 then r.order_item_id end) p3_refund,
+count(case when o.product_id = 3 then r.order_item_id end)/
+count(case when o.product_id = 3 then o.order_id end ) p3_refund_rate,
+count(case when o.product_id = 4 then o.order_id end ) p4,
+count(case when o.product_id = 4 then r.order_item_id end) p4_refund,
+count(case when o.product_id = 4 then r.order_item_id end)/
+count(case when o.product_id = 4 then o.order_id end ) p4_refund_rate
+ from order_items o left join order_item_refunds r on o.order_item_id = r.order_item_id
+group by 1,2;
+
