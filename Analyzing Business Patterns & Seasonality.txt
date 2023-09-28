@@ -1,0 +1,25 @@
+--                               Analyzing Business Patterns & Seasonality
+  -- 1. montly wise total sessions and orders
+  select year(w.created_at) year,month(w.created_at) month,count(w.website_session_id) sessions,
+  count(o.website_session_id) orders from website_sessions w left join
+  orders o on w.website_session_id = o.website_session_id where w.created_at<"2013-01-01" group by 1,2;
+  
+    -- 1. weekly wise total sessions and orders
+select min(date(w.created_at)) week_start_date,count(w.website_session_id) sessions,
+  count(o.website_session_id) orders from website_sessions w left join
+  orders o on w.website_session_id = o.website_session_id where w.created_at<"2013-01-01" group by yearweek(w.created_at);
+  
+  -- 2. average website session by voulume by hour of day and by day week
+  with t2 as(select date(created_at) date,hour(created_at) hr,weekday(created_at) weekdays,count(website_session_id) sessions
+  from website_sessions where created_at between "2012-09-15" and "2012-11-15"   group by 1,2,3 )
+  
+  select hr,
+round(avg(case when weekdays = 0 then sessions end),1) mon,
+  round(avg(case when weekdays = 1 then sessions end),1) tue,
+  round(avg(case when weekdays = 2 then sessions end),1) wed,
+  round(avg(case when weekdays= 3 then sessions end),1) thr,
+  round(avg(case when weekdays = 4 then sessions end),1) fri,
+  round(avg(case when weekdays= 5 then sessions end),1) sat,
+  round(avg(case when weekdays = 6 then sessions end),1) sun
+  from t2 group by hr;
+  
